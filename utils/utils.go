@@ -42,7 +42,7 @@ func Deploy(client *ethclient.Client, contract_name string, auth *bind.TransactO
 	if err != nil {
 		log.Fatalf("Failed to deploy contract: %v", err)
 	}
-	fmt.Printf("Basics.sol deployed! Address: %s\n", address.Hex())
+	fmt.Printf("Pvpre.sol deployed! Address: %s\n", address.Hex())
 	fmt.Printf("Transaction hash: %s\n", tx.Hash().Hex())
 	return address, tx
 }
