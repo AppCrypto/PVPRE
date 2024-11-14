@@ -23,10 +23,9 @@ func GsSetup(n, t int) (*PublicParameters, error) {
 	//使用bn128曲线的生成元
 	G := new(bn128.G1).ScalarBaseMult(big.NewInt(1))
 	p := bn128.Order
-
 	// 随机选择 n 个 α_i
-	alpha := make([]*big.Int, n)
-	for i := 0; i < n; i++ {
+	alpha := make([]*big.Int, n+1)
+	for i := 0; i <= n; i++ {
 		alpha[i], _ = rand.Int(rand.Reader, p)
 	}
 
@@ -43,17 +42,34 @@ func GsSetup(n, t int) (*PublicParameters, error) {
 func GsShare(gsspp *PublicParameters, secret *big.Int) ([]*bn128.G1, error) {
 	// 随即生成多项式系数
 	coefficients := make([]*big.Int, gsspp.T)
-	coefficients[0] = secret
+	coefficients[0] = new(big.Int).SetInt64(0) // 初始化为0
 	for i := 1; i < gsspp.T; i++ {
 		coefficients[i], _ = rand.Int(rand.Reader, gsspp.P)
 	}
 
+	// 计算系数，使 m(α_0) = 0
+	for i := 1; i < gsspp.T; i++ {
+		term := new(big.Int).Mul(coefficients[i], new(big.Int).Exp(gsspp.Alpah[0], big.NewInt(int64(i)), gsspp.P))
+		term.Mod(term, gsspp.P)
+		coefficients[0].Add(coefficients[0], term)
+		coefficients[0].Mod(coefficients[0], gsspp.P)
+	}
+
+	// 确保 m(α_0) = 0，调整第一个系数
+	coefficients[0].Neg(coefficients[0])
+	coefficients[0].Mod(coefficients[0], gsspp.P)
+
+	// result := evaluatePolynomial(coefficients, gsspp.Alpah[0], gsspp.P)
+	// fmt.Print("m(\alpha_0) = ", result)
+
 	// 计算每个share
 	shares := make([]*bn128.G1, gsspp.N)
+	S := new(bn128.G1).ScalarBaseMult(secret)
 	for i := 0; i < gsspp.N; i++ {
-		alpha := gsspp.Alpah[i]                                   //用i作为x的值
-		share := evaluatePolynomial(coefficients, alpha, gsspp.P) //计算m(i)
-		shares[i] = new(bn128.G1).ScalarBaseMult(share)           //计算G上的元素
+		alpha := gsspp.Alpah[i+1]                                  //用i作为x的值
+		mAlpha := evaluatePolynomial(coefficients, alpha, gsspp.P) //计算m(i)
+		temp := new(bn128.G1).ScalarBaseMult(mAlpha)
+		shares[i] = new(bn128.G1).Add(S, temp) //计算G上的元素
 	}
 
 	return shares, nil
@@ -61,7 +77,7 @@ func GsShare(gsspp *PublicParameters, secret *big.Int) ([]*bn128.G1, error) {
 
 // evaluatePolynomial 在给定的 x 处计算多项式的值
 func evaluatePolynomial(coefficients []*big.Int, x, order *big.Int) *big.Int {
-	result := new(big.Int).Set(coefficients[0]) // m(0) = secret
+	result := new(big.Int).Set(coefficients[0])
 	xPower := new(big.Int).Set(x)
 
 	for i := 1; i < len(coefficients); i++ {
@@ -90,6 +106,7 @@ func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1) (*bn128.G1, e
 	for i := 0; i < len(I); i++ {
 		// 获取当前的alpha_i
 		alpha_i := gsspp.Alpah[I[i]]
+		y_i := shares[I[i]-1]
 		// 计算当前分享的拉格朗日系数lambda_i
 		lambda_i := big.NewInt(1)
 		for j := 0; j < len(I); j++ {
@@ -97,9 +114,9 @@ func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1) (*bn128.G1, e
 				// lambda_i *= (0-x_j) / (x_i - x_j) mod p
 				alpha_j := gsspp.Alpah[I[j]]
 				// λ_i = λ_i * (0 - x_j) / (x_i - x_j) mod p
-				num := new(big.Int).Neg(alpha_j)          //拉格朗日系数分子部分
-				den := new(big.Int).Sub(alpha_i, alpha_j) //拉格朗日分母部分
-				den.ModInverse(den, gsspp.P)              // 求逆
+				num := new(big.Int).Sub(gsspp.Alpah[0], alpha_j) //拉格朗日系数分子部分
+				den := new(big.Int).Sub(alpha_i, alpha_j)        //拉格朗日分母部分
+				den.ModInverse(den, gsspp.P)                     // 求逆
 
 				lambda_i.Mul(lambda_i, num)
 				lambda_i.Mul(lambda_i, den)
@@ -107,7 +124,7 @@ func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1) (*bn128.G1, e
 			}
 		}
 		// 计算 λ_i * A_i 并累加到恢复的秘密 `S`
-		temp := new(bn128.G1).ScalarMult(shares[i], lambda_i)
+		temp := new(bn128.G1).ScalarMult(y_i, lambda_i)
 		S.Add(S, temp)
 	}
 	return S, nil

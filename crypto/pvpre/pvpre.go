@@ -34,7 +34,6 @@ func KDFfunc(input *bn128.G1, l int) []byte {
 	inputBytes := input.Marshal()
 
 	// 使用 HKDF 从输入生成一个 AES 密钥
-	// 选择一个盐值（可以是一个随机数），并使用 SHA256 作为哈希函数
 	salt := make([]byte, 32)             // 盐值可以根据需要更改为固定值或随机生成
 	info := []byte("AES Key Derivation") // 可选，额外的信息用于派生密钥
 
@@ -98,6 +97,7 @@ func PREReKeyVerify(Para *PrePar, pka *bn128.G1, pkb *bn128.G1, ckFrag []*bn128.
 func PREEnc2(Para *PrePar, pka *bn128.G1, M []byte, s *big.Int) *C {
 	S := new(bn128.G1).ScalarBaseMult(s)
 	K := Para.KDF(S)
+	// fmt.Println("密钥长度为：", len(K))
 	C1, err := aes.AESEncrypt(M, K)
 	if err != nil {
 		fmt.Println("Error during encryption:", err)
@@ -131,13 +131,6 @@ func PREDec2(Para *PrePar, ska *big.Int, C *C) []byte {
 }
 
 func PREDec1(Para *PrePar, pka *bn128.G1, skb *big.Int, Cp *Cp, I []int) []byte {
-	temp := new(bn128.G1).ScalarMult(pka, skb)
-	temp.Neg(temp)
-	kFrag := make([]*bn128.G1, len(Cp.C2p))
-	for i := 0; i < len(Cp.C2p); i++ {
-		kFrag[i] = new(bn128.G1)
-		kFrag[i].Add(Cp.C2p[i], temp)
-	}
 	PreK := dhpvss.DHPVSSRecon(Para.Par, Cp.C2p, pka, skb, I)
 	K := Para.KDF(PreK)
 	// fmt.Println("delegatee's K:", K)

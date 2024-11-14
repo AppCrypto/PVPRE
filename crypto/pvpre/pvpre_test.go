@@ -58,8 +58,6 @@ func TestPVPRE(t *testing.T) {
 	// fmt.Println("Encrypted C1:", C.C1)
 	// fmt.Println("Encrypted C2:", C.C2)
 
-	// 生成重加密密钥
-
 	// 执行多次生成重加密密钥过程，计算平均时间
 	// startTime := time.Now()
 	// for i := 0; i < numRuns; i++ {
@@ -74,9 +72,9 @@ func TestPVPRE(t *testing.T) {
 	// // 输出平均加密时间
 	// fmt.Printf("%d proxies : average ReKeyGen time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
 
+	// 生成重加密密钥
 	ckFrag, pi_sh := pvpre.PREReKeyGen(Para, pkb, ska, pka, PKs, s)
 
-	// 验证重加密密钥
 	// 执行多次生成重加密密钥验证过程，计算平均时间
 	startTime := time.Now()
 	for i := 0; i < numRuns; i++ {
@@ -91,6 +89,7 @@ func TestPVPRE(t *testing.T) {
 	// 输出平均加密时间
 	fmt.Printf("%d proxies : average ReKeyVerify offChain time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
 
+	// 验证重加密密钥
 	reKeyValidity := pvpre.PREReKeyVerify(Para, pka, pkb, ckFrag, PKs, pi_sh)
 	if !reKeyValidity {
 		t.Fatalf("ReKey failed validation!")
@@ -145,10 +144,10 @@ func TestPVPRE(t *testing.T) {
 	// 取0前t个份额进行恢复
 	I := make([]int, Para.Par.PP.T)
 	for i := 0; i < Para.Par.PP.T; i++ {
-		I[i] = i
+		I[i] = i + 1
 	}
 
-	// 执行多次生成重加密密文解密过程，计算平均时间
+	// 执行多次重加密密文解密过程，计算平均时间
 	// startTime := time.Now()
 	// for i := 0; i < numRuns; i++ {
 	// 	_ = pvpre.PREDec1(Para, pka, skb, Cp, I)

@@ -12,10 +12,6 @@ import (
 	// bn128 "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
 
-// // 公共参数结构体
-// // KDF:
-// type KDFFunc func(*bn128.G1, int) []byte
-
 // H:
 type HFunc func([]byte) []*big.Int
 
@@ -42,63 +38,6 @@ type DLEQProofs struct {
 	RG []*bn128.G1
 	RH []*bn128.G1
 }
-
-// type Parameters struct {
-// 	// PP  DhpvssPP
-// 	G  *bn128.G1 //群G的生成元
-// 	P  *big.Int  //群的阶
-// 	N  int       // 分享个数
-// 	T  int       //阈值
-// 	Vi []*big.Int
-// 	// Alpah []*big.Int //随机值
-// 	// KDF KDFFunc
-// 	H HFunc
-// 	// s   *big.Int //私密，为delegator所有
-// }
-
-// KDF 的实现：使用HKDF生成固定长度的对称密钥
-// func KDFfunc(input *bn128.G1, l int) []byte {
-// 	// 将G1元素转换为字节数组
-// 	inputBytes := input.Marshal()
-
-// 	// 使用 HKDF 从输入生成一个 AES 密钥
-// 	// 选择一个盐值（可以是一个随机数），并使用 SHA256 作为哈希函数
-// 	salt := make([]byte, 32)             // 盐值可以根据需要更改为固定值或随机生成
-// 	info := []byte("AES Key Derivation") // 可选，额外的信息用于派生密钥
-
-// 	// 使用HKDF生成密钥
-// 	hkdf := hkdf.New(sha256.New, inputBytes, salt, info)
-
-// 	// 从HKDF获取固定长度的密钥
-// 	key := make([]byte, l/8) //l 为密钥长度（位），转为字节
-// 	_, err := hkdf.Read(key)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return key
-// }
-
-// H 的实现：返回多项式系数
-// func Hfunc(input []byte, n int, t int) []*big.Int {
-// 	hash := sha256.Sum256(input)
-// 	// 使用哈希值的前几个字节生成多项式系数
-// 	coefficients := make([]*big.Int, t-1)
-// 	// for i := 0; i < t; i++ {
-// 	// 	coefficients[i] = new(big.Int).SetBytes(hash[i*32/5:])
-// 	// }
-// 	// 确保循环次数不超过 coefficients 数组的长度
-// 	for i := 0; i < t-1; i++ {
-// 		// 保证从哈希中提取足够的数据
-// 		start := i * (32 / (t - 1))     // 动态计算每个系数的起始位置
-// 		end := (i + 1) * (32 / (t - 1)) // 结束位置
-
-// 		if end > len(hash) {
-// 			end = len(hash)
-// 		}
-// 		coefficients[i] = new(big.Int).SetBytes(hash[start:end])
-// 	}
-// 	return coefficients
-// }
 
 func Hfunc(input []byte, n, t int) []*big.Int {
 	hash := sha256.Sum256(input)            // 使用 sha256 进行哈希
@@ -147,18 +86,18 @@ func Hfunc(input []byte, n, t int) []*big.Int {
 // 在这里为我们取alpha为从1到n
 func ComputeVI(alpha []*big.Int, p *big.Int) []*big.Int {
 	// 用于保存所有的v_i值
-	vValue := make([]*big.Int, len(alpha))
+	vValue := make([]*big.Int, len(alpha)-1)
 
 	// 计算v_i:
-	for i := 0; i < len(alpha); i++ {
+	for i := 0; i < len(alpha)-1; i++ {
 		// 初始化v_i为1
 		v_i := big.NewInt(1)
 
 		// 计算 v_i 的逆的乘积
-		for j := 0; j < len(alpha); j++ {
+		for j := 0; j < len(alpha)-1; j++ {
 			if i != j {
 				// Compute (alpha[i] - alpha[j])^-1 mod p
-				diff := new(big.Int).Sub(alpha[i], alpha[j])
+				diff := new(big.Int).Sub(alpha[i+1], alpha[j+1])
 				diff.Mod(diff, p)                           // Ensure the difference is mod p
 				inverse := new(big.Int).ModInverse(diff, p) // Compute the modular inverse
 
@@ -167,7 +106,6 @@ func ComputeVI(alpha []*big.Int, p *big.Int) []*big.Int {
 					fmt.Println("Inverse does not exist.")
 					return nil
 				}
-
 				// Multiply the result by the inverse
 				v_i.Mul(v_i, inverse)
 				v_i.Mod(v_i, p) // Take result mod p
@@ -187,10 +125,6 @@ func DHPVSSSetup(n, t, l int) (*Dhpvsspar, *big.Int, error) {
 	}
 
 	v_i := ComputeVI(pp.Alpah, pp.P)
-
-	// KDF := func(input *bn128.G1, l int) []byte {
-	// 	return KDFfunc(input, l)
-	// }
 
 	H := func(input []byte) []*big.Int {
 		// 使用 H 函数进行哈希处理
@@ -247,18 +181,48 @@ func DHPVSSShare(Par *Dhpvsspar, pkb *bn128.G1, pka *bn128.G1, ska *big.Int, PKs
 	// 生成m*
 	// var mx []*big.Int
 	mx := Par.H(input)
+	for i := 0; i < len(mx); i++ {
+		mx[i] = mx[i].Mod(mx[i], Par.PP.P)
+	}
+
+	// mi := evaluatePolynomial(mx, Par.PP.Alpah[1], Par.PP.P)
+	// exp := new(big.Int).Mul(mi, Par.Vi[0])
+
+	// start := time.Now()
+	// for i := 0; i < Par.PP.N; i++ {
+	// 	// m*(\alpha_i)
+	// 	mi := evaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
+	// 	// m*(\alpha_i) * v_i
+	// 	exp := new(big.Int).Mul(mi, Par.Vi[i])
+	// 	fmt.Println("exp = ", exp)
+	// 	_ = new(bn128.G1).ScalarMult(C[i], exp)
+	// 	// V.Add(V, result1)
+	// 	// temp := new(bn128.G1).Add(PKs[i], pkb)
+	// 	// _ = temp.ScalarMult(temp, exp)
+	// 	// U.Add(U, result2)
+	// }
+	// end := time.Now()
+
+	// total := end.Sub(start)
+	// fmt.Println("Tatol time cost :", total)
+
+	// start := time.Now()
+
 	// 求V和U
 	for i := 0; i < Par.PP.N; i++ {
 		// m*(\alpha_i)
-		mi := evaluatePolynomial(mx, Par.PP.Alpah[i], Par.PP.P)
+		mi := evaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
 		// m*(\alpha_i) * v_i
 		exp := new(big.Int).Mul(mi, Par.Vi[i])
+		exp = exp.Mod(exp, Par.PP.P)
 		result1 := new(bn128.G1).ScalarMult(C[i], exp)
 		V.Add(V, result1)
 		temp := new(bn128.G1).Add(PKs[i], pkb)
 		result2 := temp.ScalarMult(temp, exp)
 		U.Add(U, result2)
 	}
+	// end := time.Now()
+
 	// 生成证明
 	c, z, rG, rH, err := dleq.NewDLEQProof(Par.PP.G, U, pka, V, ska)
 	if err != nil {
@@ -305,13 +269,17 @@ func DHPVSSVerify(Par *Dhpvsspar, pka *bn128.G1, pkb *bn128.G1, C []*bn128.G1, P
 	// 生成m*
 	// var mx []*big.Int
 	mx := Par.H(input)
+	for i := 0; i < len(mx); i++ {
+		mx[i] = mx[i].Mod(mx[i], Par.PP.P)
+	}
 	// fmt.Println("len(mx)", len(mx))
 	// 求V和U
 	for i := 0; i < Par.PP.N; i++ {
 		// m*(\alpha_i)
-		mi := evaluatePolynomial(mx, Par.PP.Alpah[i], Par.PP.P)
+		mi := evaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
 		// m*(\alpha_i) * v_i
 		exp := new(big.Int).Mul(mi, Par.Vi[i])
+		exp = exp.Mod(exp, Par.PP.P)
 		result1 := new(bn128.G1).ScalarMult(C[i], exp)
 		V.Add(V, result1)
 		temp := new(bn128.G1).Add(PKs[i], pkb)
@@ -384,10 +352,10 @@ func DHPVSSVerifyDec(Par *Dhpvsspar, pka *bn128.G1, PKs []*bn128.G1, C []*bn128.
 
 func DHPVSSRecon(Par *Dhpvsspar, Cp []*bn128.G1, pka *bn128.G1, skb *big.Int, I []int) *bn128.G1 {
 	// var shares []*bn128.G1
-	shares := make([]*bn128.G1, len(Cp))
-	for i := 0; i < len(Cp); i++ {
-		temp := new(bn128.G1).ScalarMult(pka, skb)
-		temp.Neg(temp)
+	shares := make([]*bn128.G1, Par.PP.T)
+	temp := new(bn128.G1).ScalarMult(pka, skb)
+	temp.Neg(temp)
+	for i := 0; i < Par.PP.T; i++ {
 		shares[i] = new(bn128.G1).Add(Cp[i], temp)
 	}
 	// var S bn128.G1

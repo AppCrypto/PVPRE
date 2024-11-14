@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"pvpre/crypto/dhpvss"
 	"testing"
+	"time"
 
 	bn128 "github.com/fentec-project/bn256"
 	"github.com/stretchr/testify/assert"
@@ -14,13 +15,29 @@ import (
 func TestHfun(t *testing.T) {
 	//实例输入
 	input := []byte("test")
-	nValue := 15
-	tValue := 11 // 示例的阈值
+	nValue := 100
+	tValue := 51 // 示例的阈值
+
+	// numRuns := 100 //重复执行次数
+	// var totalDuration time.Duration
+	// // 执行多次加密，计算平均时间
+	// startTime := time.Now()
+	// for i := 0; i < numRuns; i++ {
+	// 	_ = dhpvss.Hfunc(input, nValue, tValue)
+	// }
+	// endTime := time.Now()
+	// totalDuration = endTime.Sub(startTime)
+
+	// // 计算平均时间
+	// averageDuration := totalDuration / time.Duration(numRuns)
+
+	// // 输出平均加密时间
+	// fmt.Printf("Average Hfunc time over %d runs: %s\n", numRuns, averageDuration)
 
 	coefficients := dhpvss.Hfunc(input, nValue, tValue)
 
 	// 检查返回的系数数量是否为t-1
-	assert.Len(t, coefficients, tValue-1, "Hfunc should return t-1 coefficients")
+	assert.Len(t, coefficients, nValue-tValue-1, "Hfunc should return t-1 coefficients")
 
 	// 确保系数是大整数类型
 	for _, coeff := range coefficients {
@@ -39,7 +56,7 @@ func TestComputeVI(t *testing.T) {
 	vi := dhpvss.ComputeVI(alpha, p)
 
 	//结果应该是与alpha长度一样
-	assert.Len(t, vi, len(alpha), "ComputeVI should return the same number of v_i as alpha")
+	assert.Len(t, vi, len(alpha)-1, "ComputeVI should return the same number of v_i as alpha")
 
 	// 检查 vi 中的每一个元素是否为 *big.Int 类型
 	for _, v := range vi {
@@ -89,7 +106,7 @@ func TestDHPVSSShare(t *testing.T) {
 
 func TestDHPVSSVerify(t *testing.T) {
 	// 使用随机生成的公共密钥、私钥和其他参数进行测试
-	Par, s, err := dhpvss.DHPVSSSetup(10, 6, 128)
+	Par, s, err := dhpvss.DHPVSSSetup(10, 6, 256)
 	assert.NoError(t, err)
 
 	// 2. 生成参与方的密钥对
@@ -107,6 +124,22 @@ func TestDHPVSSVerify(t *testing.T) {
 		}
 		PKs[i] = new(bn128.G1).ScalarBaseMult(SKs[i])
 	}
+
+	numRuns := 100 //重复执行次数
+	var totalDuration time.Duration
+	// 执行多次加密，计算平均时间
+	startTime := time.Now()
+	for i := 0; i < numRuns; i++ {
+		_, _ = dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
+	}
+	endTime := time.Now()
+	totalDuration = endTime.Sub(startTime)
+
+	// 计算平均时间
+	averageDuration := totalDuration / time.Duration(numRuns)
+
+	// 输出平均加密时间
+	fmt.Printf("Average DHPVSSShare time over %d runs: %s\n", numRuns, averageDuration)
 
 	C, pi_sh := dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
 
@@ -245,7 +278,7 @@ func TestDHPVSS(t *testing.T) {
 	// 取0前t个份额进行恢复
 	I := make([]int, Par.PP.T)
 	for i := 0; i < Par.PP.T; i++ {
-		I[i] = i
+		I[i] = i + 1
 	}
 	S := dhpvss.DHPVSSRecon(Par, Cp, pka, skb, I) //假设I = [0,1,2]
 	if S == nil {

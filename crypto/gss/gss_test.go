@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"testing"
 
+	// "time"
+
 	"pvpre/crypto/gss"
 
 	bn128 "github.com/fentec-project/bn256"
@@ -29,7 +31,7 @@ func TestGsStup(t *testing.T) {
 
 // 测试秘密分享生成
 func TestGsShare(t *testing.T) {
-	n, threshold := 5, 3
+	n, threshold := 10, 6
 	pp, err := gss.GsSetup(n, threshold)
 	if err != nil {
 		t.Fatalf("Error during setup: %v", err)
@@ -37,6 +39,23 @@ func TestGsShare(t *testing.T) {
 
 	// 生成随机秘密
 	secret, _ := rand.Int(rand.Reader, pp.P)
+
+	// numRuns := 100 //重复执行次数
+	// var totalDuration time.Duration
+	// // 执行多次加密，计算平均时间
+	// startTime := time.Now()
+	// for i := 0; i < numRuns; i++ {
+	// 	_, _ = gss.GsShare(pp, secret)
+	// }
+	// endTime := time.Now()
+	// totalDuration = endTime.Sub(startTime)
+
+	// // 计算平均时间
+	// averageDuration := totalDuration / time.Duration(numRuns)
+
+	// // 输出平均加密时间
+	// fmt.Printf("Average GsShare time over %d runs: %s\n", numRuns, averageDuration)
+
 	shares, err := gss.GsShare(pp, secret)
 	if err != nil {
 		t.Fatalf("Error generating shares: %v", err)
@@ -72,7 +91,7 @@ func TestGSRecon(t *testing.T) {
 	// 取0前t个份额进行恢复
 	I := make([]int, threshold)
 	for i := 0; i < threshold; i++ {
-		I[i] = i
+		I[i] = i + 1
 	}
 	// selectedShares := []*bn128.G1{shares[0], shares[1], shares[2]}
 
