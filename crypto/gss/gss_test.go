@@ -4,7 +4,8 @@ import (
 	"crypto/rand"
 	"testing"
 
-	// "time"
+	"fmt"
+	"time"
 
 	"pvpre/crypto/gss"
 
@@ -74,7 +75,8 @@ func TestGsShare(t *testing.T) {
 
 // 测试秘密恢复
 func TestGSRecon(t *testing.T) {
-	n, threshold := 10, 6
+	n := 100
+	threshold := 2*n/3 + 1
 	pp, err := gss.GsSetup(n, threshold)
 	if err != nil {
 		t.Fatalf("Error during setup: %v", err)
@@ -95,7 +97,25 @@ func TestGSRecon(t *testing.T) {
 	}
 	// selectedShares := []*bn128.G1{shares[0], shares[1], shares[2]}
 
-	recoveredSecret, err := gss.GsRecon(pp, I, shares)
+	lambda, _ := gss.PrecomputeLagrangeCoefficients(pp, I)
+
+	numRuns := 100 //重复执行次数
+	var totalDuration time.Duration
+	// 执行多次重建秘密过程，计算平均时间
+	startTime := time.Now()
+	for i := 0; i < numRuns; i++ {
+		_, _ = gss.GsRecon(pp, I, shares, lambda)
+	}
+	endTime := time.Now()
+	totalDuration = endTime.Sub(startTime)
+
+	// 计算平均时间
+	averageDuration := totalDuration / time.Duration(numRuns)
+
+	// 输出平均加密时间
+	fmt.Printf("%d proxies : average GsRecon time over %d runs: %s\n", n, numRuns, averageDuration)
+
+	recoveredSecret, err := gss.GsRecon(pp, I, shares, lambda)
 	if err != nil {
 		t.Fatalf("Error reconstructing secret: %v", err)
 	}

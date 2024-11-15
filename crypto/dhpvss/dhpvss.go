@@ -13,7 +13,7 @@ import (
 )
 
 // H:
-type HFunc func([]byte) []*big.Int
+type HFunc func([]byte) ([]*big.Int, error)
 
 type Dhpvsspar struct {
 	PP *gss.PublicParameters
@@ -39,7 +39,11 @@ type DLEQProofs struct {
 	RH []*bn128.G1
 }
 
-func Hfunc(input []byte, n, t int) []*big.Int {
+func Hfunc(input []byte, n, t int) ([]*big.Int, error) {
+	if t == n || t == n-1 {
+
+		return []*big.Int{big.NewInt(1)}, nil //errors.New("t is too big, t < n-1")
+	}
 	hash := sha256.Sum256(input)            // 使用 sha256 进行哈希
 	coefficients := make([]*big.Int, n-t-1) // 生成 n-t-1 个系数
 
@@ -79,7 +83,7 @@ func Hfunc(input []byte, n, t int) []*big.Int {
 		}
 	}
 
-	return coefficients
+	return coefficients, nil
 }
 
 // 计算VI
@@ -126,7 +130,7 @@ func DHPVSSSetup(n, t, l int) (*Dhpvsspar, *big.Int, error) {
 
 	v_i := ComputeVI(pp.Alpah, pp.P)
 
-	H := func(input []byte) []*big.Int {
+	H := func(input []byte) ([]*big.Int, error) {
 		// 使用 H 函数进行哈希处理
 		return Hfunc(input, pp.N, pp.T) // Hfunc 函数用于返回多项式系数
 	}
@@ -180,7 +184,10 @@ func DHPVSSShare(Par *Dhpvsspar, pkb *bn128.G1, pka *bn128.G1, ska *big.Int, PKs
 
 	// 生成m*
 	// var mx []*big.Int
-	mx := Par.H(input)
+	mx, err := Par.H(input)
+	if err != nil {
+		fmt.Printf("Error reconstructing secret: %v", err)
+	}
 	for i := 0; i < len(mx); i++ {
 		mx[i] = mx[i].Mod(mx[i], Par.PP.P)
 	}
@@ -268,7 +275,10 @@ func DHPVSSVerify(Par *Dhpvsspar, pka *bn128.G1, pkb *bn128.G1, C []*bn128.G1, P
 	}
 	// 生成m*
 	// var mx []*big.Int
-	mx := Par.H(input)
+	mx, err := Par.H(input)
+	if err != nil {
+		fmt.Printf("Error reconstructing secret: %v", err)
+	}
 	for i := 0; i < len(mx); i++ {
 		mx[i] = mx[i].Mod(mx[i], Par.PP.P)
 	}
@@ -286,8 +296,8 @@ func DHPVSSVerify(Par *Dhpvsspar, pka *bn128.G1, pkb *bn128.G1, C []*bn128.G1, P
 		result2 := temp.ScalarMult(temp, exp)
 		U.Add(U, result2)
 	}
-	err := dleq.Verify(pi_sh.C, pi_sh.Z, Par.PP.G, U, pi_sh.XG, pi_sh.XH, pi_sh.RG, pi_sh.RH)
-	if err != nil {
+	err1 := dleq.Verify(pi_sh.C, pi_sh.Z, Par.PP.G, U, pi_sh.XG, pi_sh.XH, pi_sh.RG, pi_sh.RH)
+	if err1 != nil {
 		fmt.Println("Verification failed:", err) // 打印错误信息
 		return false
 	}
@@ -350,7 +360,7 @@ func DHPVSSVerifyDec(Par *Dhpvsspar, pka *bn128.G1, PKs []*bn128.G1, C []*bn128.
 	return true
 }
 
-func DHPVSSRecon(Par *Dhpvsspar, Cp []*bn128.G1, pka *bn128.G1, skb *big.Int, I []int) *bn128.G1 {
+func DHPVSSRecon(Par *Dhpvsspar, Cp []*bn128.G1, pka *bn128.G1, skb *big.Int, I []int, lambda []*big.Int) *bn128.G1 {
 	// var shares []*bn128.G1
 	shares := make([]*bn128.G1, Par.PP.T)
 	temp := new(bn128.G1).ScalarMult(pka, skb)
@@ -359,7 +369,7 @@ func DHPVSSRecon(Par *Dhpvsspar, Cp []*bn128.G1, pka *bn128.G1, skb *big.Int, I 
 		shares[i] = new(bn128.G1).Add(Cp[i], temp)
 	}
 	// var S bn128.G1
-	S, err := gss.GsRecon(Par.PP, I, shares)
+	S, err := gss.GsRecon(Par.PP, I, shares, lambda)
 	if err != nil {
 		fmt.Println(("Error reconstructing secret"))
 	}

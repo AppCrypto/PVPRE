@@ -130,8 +130,8 @@ func PREDec2(Para *PrePar, ska *big.Int, C *C) []byte {
 	return M
 }
 
-func PREDec1(Para *PrePar, pka *bn128.G1, skb *big.Int, Cp *Cp, I []int) []byte {
-	PreK := dhpvss.DHPVSSRecon(Para.Par, Cp.C2p, pka, skb, I)
+func PREDec1(Para *PrePar, pka *bn128.G1, skb *big.Int, Cp *Cp, I []int, lambda []*big.Int) []byte {
+	PreK := dhpvss.DHPVSSRecon(Para.Par, Cp.C2p, pka, skb, I, lambda)
 	K := Para.KDF(PreK)
 	// fmt.Println("delegatee's K:", K)
 	M, err := aes.AESDecrypt(Cp.C1, K)

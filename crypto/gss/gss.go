@@ -92,30 +92,24 @@ func evaluatePolynomial(coefficients []*big.Int, x, order *big.Int) *big.Int {
 	return result
 }
 
-// 接收公共参数 `gsspp`，索引集合 `I`，以及分享值 `shares`，返回恢复的秘密 `S`
-func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1) (*bn128.G1, error) {
-	// 检查`I`是否包含足够的份额来恢复秘密
+// 预计算拉格朗日系数
+func PrecomputeLagrangeCoefficients(gsspp *PublicParameters, I []int) ([]*big.Int, error) {
+	// 检查I是否包含足够的份额来恢复秘密
 	if len(I) < gsspp.T {
 		return nil, errors.New("not enough shares to recover the secret")
 	}
 
-	//初始化恢复的秘密`S`
-	S := new(bn128.G1).ScalarBaseMult(big.NewInt(0))
-
-	// 计算拉格朗日系数并累加每个分享
+	// 计算所有拉格朗日系数
+	lambdas := make([]*big.Int, len(I))
 	for i := 0; i < len(I); i++ {
-		// 获取当前的alpha_i
 		alpha_i := gsspp.Alpah[I[i]]
-		y_i := shares[I[i]-1]
-		// 计算当前分享的拉格朗日系数lambda_i
 		lambda_i := big.NewInt(1)
 		for j := 0; j < len(I); j++ {
 			if i != j {
-				// lambda_i *= (0-x_j) / (x_i - x_j) mod p
 				alpha_j := gsspp.Alpah[I[j]]
-				// λ_i = λ_i * (0 - x_j) / (x_i - x_j) mod p
-				num := new(big.Int).Sub(gsspp.Alpah[0], alpha_j) //拉格朗日系数分子部分
-				den := new(big.Int).Sub(alpha_i, alpha_j)        //拉格朗日分母部分
+				// λ_i = λ_i * (0 - α_j) / (α_i - α_j) mod p
+				num := new(big.Int).Sub(gsspp.Alpah[0], alpha_j) // 拉格朗日系数分子部分
+				den := new(big.Int).Sub(alpha_i, alpha_j)        // 拉格朗日分母部分
 				den.ModInverse(den, gsspp.P)                     // 求逆
 
 				lambda_i.Mul(lambda_i, num)
@@ -123,9 +117,68 @@ func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1) (*bn128.G1, e
 				lambda_i.Mod(lambda_i, gsspp.P)
 			}
 		}
+		lambdas[i] = lambda_i
+	}
+
+	return lambdas, nil
+}
+
+// 接收预计算的拉格朗日系数 `lambdas`，索引集合 `I`，以及分享值 `shares`，返回恢复的秘密 `S`
+func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1, lambdas []*big.Int) (*bn128.G1, error) {
+	// // 检查`I`是否包含足够的份额来恢复秘密
+	// if len(I) < gsspp.T {
+	// 	return nil, errors.New("not enough shares to recover the secret")
+	// }
+
+	// 初始化恢复的秘密 `S`
+	S := new(bn128.G1).ScalarBaseMult(big.NewInt(0))
+
+	// 使用预计算的拉格朗日系数并累加每个分享
+	for i := 0; i < gsspp.T; i++ {
+		y_i := shares[I[i]-1]
+		lambda_i := lambdas[i]
 		// 计算 λ_i * A_i 并累加到恢复的秘密 `S`
 		temp := new(bn128.G1).ScalarMult(y_i, lambda_i)
 		S.Add(S, temp)
 	}
+
 	return S, nil
 }
+
+// 接收公共参数 `gsspp`，索引集合 `I`，以及分享值 `shares`，返回恢复的秘密 `S`
+// func GsRecon(gsspp *PublicParameters, I []int, shares []*bn128.G1) (*bn128.G1, error) {
+// 	// 检查`I`是否包含足够的份额来恢复秘密
+// 	if len(I) < gsspp.T {
+// 		return nil, errors.New("not enough shares to recover the secret")
+// 	}
+
+// 	//初始化恢复的秘密`S`
+// 	S := new(bn128.G1).ScalarBaseMult(big.NewInt(0))
+
+// 	// 计算拉格朗日系数并累加每个分享
+// 	for i := 0; i < len(I); i++ {
+// 		// 获取当前的alpha_i
+// 		alpha_i := gsspp.Alpah[I[i]]
+// 		y_i := shares[I[i]-1]
+// 		// 计算当前分享的拉格朗日系数lambda_i
+// 		lambda_i := big.NewInt(1)
+// 		for j := 0; j < len(I); j++ {
+// 			if i != j {
+// 				// lambda_i *= (0-x_j) / (x_i - x_j) mod p
+// 				alpha_j := gsspp.Alpah[I[j]]
+// 				// λ_i = λ_i * (0 - x_j) / (x_i - x_j) mod p
+// 				num := new(big.Int).Sub(gsspp.Alpah[0], alpha_j) //拉格朗日系数分子部分
+// 				den := new(big.Int).Sub(alpha_i, alpha_j)        //拉格朗日分母部分
+// 				den.ModInverse(den, gsspp.P)                     // 求逆
+
+// 				lambda_i.Mul(lambda_i, num)
+// 				lambda_i.Mul(lambda_i, den)
+// 				lambda_i.Mod(lambda_i, gsspp.P)
+// 			}
+// 		}
+// 		// 计算 λ_i * A_i 并累加到恢复的秘密 `S`
+// 		temp := new(bn128.G1).ScalarMult(y_i, lambda_i)
+// 		S.Add(S, temp)
+// 	}
+// 	return S, nil
+// }

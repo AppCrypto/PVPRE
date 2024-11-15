@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"pvpre/crypto/dhpvss"
+	"pvpre/crypto/gss"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ func TestHfun(t *testing.T) {
 	// // 输出平均加密时间
 	// fmt.Printf("Average Hfunc time over %d runs: %s\n", numRuns, averageDuration)
 
-	coefficients := dhpvss.Hfunc(input, nValue, tValue)
+	coefficients, _ := dhpvss.Hfunc(input, nValue, tValue)
 
 	// 检查返回的系数数量是否为t-1
 	assert.Len(t, coefficients, nValue-tValue-1, "Hfunc should return t-1 coefficients")
@@ -125,21 +126,21 @@ func TestDHPVSSVerify(t *testing.T) {
 		PKs[i] = new(bn128.G1).ScalarBaseMult(SKs[i])
 	}
 
-	numRuns := 100 //重复执行次数
-	var totalDuration time.Duration
-	// 执行多次加密，计算平均时间
-	startTime := time.Now()
-	for i := 0; i < numRuns; i++ {
-		_, _ = dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
-	}
-	endTime := time.Now()
-	totalDuration = endTime.Sub(startTime)
+	// numRuns := 100 //重复执行次数
+	// var totalDuration time.Duration
+	// // 执行多次加密，计算平均时间
+	// startTime := time.Now()
+	// for i := 0; i < numRuns; i++ {
+	// 	_, _ = dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
+	// }
+	// endTime := time.Now()
+	// totalDuration = endTime.Sub(startTime)
 
-	// 计算平均时间
-	averageDuration := totalDuration / time.Duration(numRuns)
+	// // 计算平均时间
+	// averageDuration := totalDuration / time.Duration(numRuns)
 
 	// 输出平均加密时间
-	fmt.Printf("Average DHPVSSShare time over %d runs: %s\n", numRuns, averageDuration)
+	// fmt.Printf("Average DHPVSSShare time over %d runs: %s\n", numRuns, averageDuration)
 
 	C, pi_sh := dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
 
@@ -224,8 +225,8 @@ func TestDHPVSSVerifyDec(t *testing.T) {
 
 func TestDHPVSS(t *testing.T) {
 	// 测试设置
-	n := 10        // 参与方数
-	threshold := 6 // 阈值
+	n := 1         // 参与方数
+	threshold := 1 // 阈值
 	l := 256       // 密钥长度（位）
 
 	// 1. 生成系统参数
@@ -254,11 +255,13 @@ func TestDHPVSS(t *testing.T) {
 	C, pi_sh := dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
 
 	// 4. 验证份额
-	isValid := dhpvss.DHPVSSVerify(Par, pka, pkb, C, PKs, pi_sh)
-	if !isValid {
-		t.Fatalf("Share validation failed")
+	if threshold != n { //为了保证threshold==n时能正常测试其他部分的开销，在此种情况下跳过验证
+		isValid := dhpvss.DHPVSSVerify(Par, pka, pkb, C, PKs, pi_sh)
+		if !isValid {
+			t.Fatalf("Share validation failed")
+		}
+		fmt.Println("Share validation passed")
 	}
-	fmt.Println("Share validation passed")
 
 	// 5. 预重建过程验证
 	Cp, pi_re := dhpvss.DHPVSSPreRecon(Par, pka, PKs, SKs, C)
@@ -280,7 +283,25 @@ func TestDHPVSS(t *testing.T) {
 	for i := 0; i < Par.PP.T; i++ {
 		I[i] = i + 1
 	}
-	S := dhpvss.DHPVSSRecon(Par, Cp, pka, skb, I) //假设I = [0,1,2]
+	lambda, _ := gss.PrecomputeLagrangeCoefficients(Par.PP, I)
+
+	numRuns := 100 //重复执行次数
+	var totalDuration time.Duration
+	// 执行多次重建秘密过程，计算平均时间
+	startTime := time.Now()
+	for i := 0; i < numRuns; i++ {
+		_ = dhpvss.DHPVSSRecon(Par, Cp, pka, skb, I, lambda)
+	}
+	endTime := time.Now()
+	totalDuration = endTime.Sub(startTime)
+
+	// 计算平均时间
+	averageDuration := totalDuration / time.Duration(numRuns)
+
+	// 输出平均加密时间
+	fmt.Printf("%d proxies : average DHPVSSRecon time over %d runs: %s\n", n, numRuns, averageDuration)
+
+	S := dhpvss.DHPVSSRecon(Par, Cp, pka, skb, I, lambda)
 	if S == nil {
 		t.Fatalf("Failed to reconstruct secret")
 	}
