@@ -10,11 +10,11 @@ OS=$(uname -s)
 case "$OS" in
   Linux*)
     echo "Linux"
-    ganache --mnemonic "pvgss"  -l 90071992547 > ganache_output.txt &
+    ganache-cli --mnemonic "pvpre"  > ganache_output.txt &
     ;;
   Darwin*)
     echo "macOS"
-    ganache-cli --mnemonic "pvgss" -l 90071992547 > ganache_output.txt &
+    ganache-cli --mnemonic "pvpre" > ganache_output.txt &
     ;;
   CYGWIN*|MINGW32*|MSYS*|MINGW*)
     echo "Windows"
@@ -42,4 +42,7 @@ cat ganache_output.txt | grep 'Private Keys' -A 12 | grep -o '0x.*' | while read
 done
 #这个命令在ubuntu系统中存在不会杀死ganache的bug，ganache在ubuntu启动的进程为node，使用之后，需要手动kill杀死占用端口的进程
 rm ganache_output.txt
-ps -ef|grep 'ganache'|xargs kill -9
+# ps -ef|grep 'ganache-cli'|xargs kill -9
+ps -ef | grep ganache-cli | grep -v grep | awk '{print $2}' | xargs kill -9
+
+# pgrep ganache | xargs kill -9

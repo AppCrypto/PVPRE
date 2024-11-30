@@ -13,6 +13,8 @@
 
 - `Abigen`    Version: v1.14.3
 
+- `ipfs`    Version: v0.22.0
+
   ```bash
   go get -u github.com/ethereum/go-ethereum
   go install github.com/ethereum/go-ethereum/cmd/abigen@v1.14.3
@@ -36,16 +38,22 @@
 2. start ganache
 
    ```bash
-   ganache --mnemonic "pvpre" -l 90071992547 -e 1000
+   ganache-cli --mnemonic "pvpre" -l 90071992547 -e 1000
    ```
 
-3. Compile the smart contract code
+3. start ipfs
+
+   ```bash
+   ipfs daemon
+   ```
+
+4. Compile the smart contract code
 
    ```bash
    bash compile.sh
    ```
 
-4. Run the main.go
+5. Run the main.go
 
    ```bash
    go run main.go

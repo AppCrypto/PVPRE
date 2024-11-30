@@ -9,15 +9,19 @@ import (
 	"testing"
 	"time"
 
-	bn128 "github.com/fentec-project/bn256"
+	// bn128 "github.com/fentec-project/bn256"
+	bn128 "pvpre/bn128"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHfun(t *testing.T) {
 	//实例输入
-	input := []byte("test")
+	input := []byte("hello world")
 	nValue := 100
 	tValue := 51 // 示例的阈值
+
+	fmt.Println("input = ", input)
 
 	// numRuns := 100 //重复执行次数
 	// var totalDuration time.Duration
@@ -63,6 +67,78 @@ func TestComputeVI(t *testing.T) {
 	for _, v := range vi {
 		assert.IsType(t, &big.Int{}, v, "Each v_i should be of type *big.Int")
 	}
+}
+
+func TestEvakuatePolvnomialcost(t *testing.T) {
+	// 测试设置
+	n := 90              // 参与方数
+	threshold := n/2 + 1 // 阈值
+	l := 256             // 密钥长度（位）
+
+	// 1. 生成系统参数
+	Par, s, err := dhpvss.DHPVSSSetup(n, threshold, l)
+	if err != nil {
+		t.Fatalf("Error setting up DHPVSS: %v", err)
+	}
+	fmt.Println("System Parameters Generated")
+
+	// 2. 生成参与方的密钥对
+	ska := big.NewInt(7)
+	skb := big.NewInt(10)
+	pka := new(bn128.G1).ScalarBaseMult(ska)
+	pkb := new(bn128.G1).ScalarBaseMult(skb)
+	PKs := make([]*bn128.G1, Par.PP.N)
+	SKs := make([]*big.Int, Par.PP.N)
+	for i := 0; i < Par.PP.N; i++ {
+		SKs[i], err = rand.Int(rand.Reader, Par.PP.P)
+		if err != nil {
+			fmt.Println("Error generating random value for SKs:", err)
+			return
+		}
+		PKs[i] = new(bn128.G1).ScalarBaseMult(SKs[i])
+	}
+	// 3. 分配秘密份额
+	C, _ := dhpvss.DHPVSSShare(Par, pkb, pka, ska, PKs, s)
+
+	var input []byte
+
+	input = append(input, pka.Marshal()...)
+	input = append(input, pkb.Marshal()...)
+	for i := 0; i < Par.PP.N; i++ {
+		input = append(input, PKs[i].Marshal()...)
+		input = append(input, C[i].Marshal()...)
+	}
+	// 生成m*
+	// var mx []*big.Int
+	mx, err := Par.H(input)
+	if err != nil {
+		fmt.Printf("Error reconstructing secret: %v", err)
+	}
+	for i := 0; i < len(mx); i++ {
+		mx[i] = mx[i].Mod(mx[i], Par.PP.P)
+	}
+	// fmt.Println("len(mx)", len(mx))
+	// 求V和U
+
+	numRuns := 100 //重复执行次数
+	var totalDuration time.Duration
+	// 执行多次，计算平均时间
+	startTime := time.Now()
+	for i := 0; i < numRuns; i++ {
+		for i := 0; i < Par.PP.N; i++ {
+			// m*(\alpha_i)
+			_ = dhpvss.EvaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
+		}
+	}
+	endTime := time.Now()
+	totalDuration = endTime.Sub(startTime)
+
+	// 计算平均时间
+	averageDuration := totalDuration / time.Duration(numRuns)
+
+	// 输出平均加密时间
+	fmt.Printf("%d proxies : average 多项式计算 time over %d runs: %s\n", n, numRuns, averageDuration)
+
 }
 
 func TestDHPVSSSetup(t *testing.T) {

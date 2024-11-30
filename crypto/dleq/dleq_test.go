@@ -7,7 +7,8 @@ import (
 	"pvpre/crypto/dleq"
 	"testing"
 
-	bn128 "github.com/fentec-project/bn256"
+	// bn128 "github.com/fentec-project/bn256"
+	bn128 "pvpre/bn128"
 	// bn128 "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
 

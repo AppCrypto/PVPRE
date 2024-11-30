@@ -8,7 +8,9 @@ import (
 	"pvpre/crypto/aes"
 	"pvpre/crypto/dhpvss"
 
-	bn128 "github.com/fentec-project/bn256"
+	// bn128 "github.com/fentec-project/bn256"
+	bn128 "pvpre/bn128"
+
 	"golang.org/x/crypto/hkdf"
 	// bn128 "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )

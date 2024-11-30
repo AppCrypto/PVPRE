@@ -8,7 +8,8 @@ import (
 	"pvpre/crypto/dleq"
 	"pvpre/crypto/gss"
 
-	bn128 "github.com/fentec-project/bn256"
+	// bn128 "github.com/fentec-project/bn256"
+	bn128 "pvpre/bn128"
 	// bn128 "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
 
@@ -80,6 +81,12 @@ func Hfunc(input []byte, n, t int) ([]*big.Int, error) {
 		for i := 0; i < leftoverBytes; i++ {
 			// 避免重复赋值整个 hash，确保正确填充
 			coefficients[i%len(coefficients)] = new(big.Int).SetBytes(hash[i:])
+		}
+	}
+
+	if n-t-1 >= 32 {
+		for i := 32; i < n-t-1; i++ {
+			coefficients[i] = coefficients[i%len(hash)]
 		}
 	}
 
@@ -218,7 +225,7 @@ func DHPVSSShare(Par *Dhpvsspar, pkb *bn128.G1, pka *bn128.G1, ska *big.Int, PKs
 	// 求V和U
 	for i := 0; i < Par.PP.N; i++ {
 		// m*(\alpha_i)
-		mi := evaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
+		mi := EvaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
 		// m*(\alpha_i) * v_i
 		exp := new(big.Int).Mul(mi, Par.Vi[i])
 		exp = exp.Mod(exp, Par.PP.P)
@@ -241,7 +248,7 @@ func DHPVSSShare(Par *Dhpvsspar, pkb *bn128.G1, pka *bn128.G1, ska *big.Int, PKs
 }
 
 // evaluatePolynomial 在给定的 x 处计算多项式的值
-func evaluatePolynomial(coefficients []*big.Int, x, order *big.Int) *big.Int {
+func EvaluatePolynomial(coefficients []*big.Int, x, order *big.Int) *big.Int {
 	result := new(big.Int).Set(coefficients[0]) // m(0) = secret
 	xPower := new(big.Int).Set(x)
 
@@ -286,7 +293,7 @@ func DHPVSSVerify(Par *Dhpvsspar, pka *bn128.G1, pkb *bn128.G1, C []*bn128.G1, P
 	// 求V和U
 	for i := 0; i < Par.PP.N; i++ {
 		// m*(\alpha_i)
-		mi := evaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
+		mi := EvaluatePolynomial(mx, Par.PP.Alpah[i+1], Par.PP.P)
 		// m*(\alpha_i) * v_i
 		exp := new(big.Int).Mul(mi, Par.Vi[i])
 		exp = exp.Mod(exp, Par.PP.P)

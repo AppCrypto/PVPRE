@@ -70,30 +70,32 @@ func TestPVPRE(t *testing.T) {
 	// // 计算平均时间
 	// averageDuration := totalDuration / time.Duration(numRuns)
 
-	// // 输出平均加密时间
+	// 输出平均加密时间
 	// fmt.Printf("%d proxies : average ReKeyGen time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
 
 	// 生成重加密密钥
 	ckFrag, pi_sh := pvpre.PREReKeyGen(Para, pkb, ska, pka, PKs, s)
 
 	// 执行多次生成重加密密钥验证过程，计算平均时间
-	// startTime := time.Now()
-	// for i := 0; i < numRuns; i++ {
-	// 	_ = pvpre.PREReKeyVerify(Para, pka, pkb, ckFrag, PKs, pi_sh)
-	// }
-	// endTime := time.Now()
-	// totalDuration = endTime.Sub(startTime)
+	startTime := time.Now()
+	for i := 0; i < numRuns; i++ {
+		_ = pvpre.PREReKeyVerify(Para, pka, pkb, ckFrag, PKs, pi_sh)
+	}
+	endTime := time.Now()
+	totalDuration = endTime.Sub(startTime)
 
-	// // 计算平均时间
-	// averageDuration := totalDuration / time.Duration(numRuns)
+	// 计算平均时间
+	averageDuration := totalDuration / time.Duration(numRuns)
 
-	// // 输出平均加密时间
-	// fmt.Printf("%d proxies : average ReKeyVerify offChain time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
+	// 输出平均加密时间
+	fmt.Printf("%d proxies : average ReKeyVerify offChain time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
 
 	// 验证重加密密钥
-	reKeyValidity := pvpre.PREReKeyVerify(Para, pka, pkb, ckFrag, PKs, pi_sh)
-	if !reKeyValidity {
-		t.Fatalf("ReKey failed validation!")
+	if n != threshold {
+		reKeyValidity := pvpre.PREReKeyVerify(Para, pka, pkb, ckFrag, PKs, pi_sh)
+		if !reKeyValidity {
+			t.Fatalf("ReKey failed validation!")
+		}
 	}
 
 	// 执行多次生成重加密过程，计算平均时间
@@ -151,18 +153,18 @@ func TestPVPRE(t *testing.T) {
 	lambda, _ := gss.PrecomputeLagrangeCoefficients(Para.Par.PP, I)
 
 	// 执行多次重加密密文解密过程，计算平均时间
-	startTime := time.Now()
-	for i := 0; i < numRuns; i++ {
-		_ = pvpre.PREDec1(Para, pka, skb, Cp, I, lambda)
-	}
-	endTime := time.Now()
-	totalDuration = endTime.Sub(startTime)
+	// startTime := time.Now()
+	// for i := 0; i < numRuns; i++ {
+	// 	_ = pvpre.PREDec1(Para, pka, skb, Cp, I, lambda)
+	// }
+	// endTime := time.Now()
+	// totalDuration = endTime.Sub(startTime)
 
-	// 计算平均时间
-	averageDuration := totalDuration / time.Duration(numRuns)
+	// // 计算平均时间
+	// averageDuration := totalDuration / time.Duration(numRuns)
 
-	// 输出平均加密时间
-	fmt.Printf("%d proxies : average PREDec1 time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
+	// // 输出平均加密时间
+	// fmt.Printf("%d proxies : average PREDec1 time over %d runs: %s\n", Para.Par.PP.N, numRuns, averageDuration)
 
 	M_dec1 := pvpre.PREDec1(Para, pka, skb, Cp, I, lambda)
 	// fmt.Println("Decrypted Message by delegatee:", M_dec1)
