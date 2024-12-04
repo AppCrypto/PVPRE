@@ -17,36 +17,47 @@ contract Verification
 
 
     // 所有权确权过程
+    function UploadMetadata(string memory id, string memory filehash, int256 size, string memory desp, uint time) public payable {
+        // require(bytes(metadataRecords[metadata.Hash].Hash).length == 0, "Metadata with this Hash already exists, the person does not have the ownership over the data");
+        metadata.ID = id;
+        metadata.Hash = filehash;
+        metadata.size = size;
+        metadata.description = desp;
+        metadata.timestamp = time;
+    }
+
+
+    
     function addMetadata() public {
         // 检查是否已经有相同的Hash
-        require(bytes(metadataRecords[metadata.Hash].Hash).length == 0, "Metadata with this Hash already exists");
+        require(bytes(metadataRecords[metadata.Hash].Hash).length == 0, "Metadata with this Hash already exists, the person does not have the ownership over the data");
         // 存储新的Metadata
         metadataRecords[metadata.Hash] = metadata;
     }
 
 
-    struct OwnershipCertificate {
-        string owner_ID;
-        string Hash;
-        int256 size;
-        bool states;
-        uint timestamp;
-    }
+    // struct OwnershipCertificate {
+    //     string owner_ID;
+    //     string Hash;
+    //     int256 size;
+    //     bool states;
+    //     uint timestamp;
+    // }
 
-    // 存储已存在的 OwnershipCertificate，映射 Hash 到 Metadata
-    mapping(string => OwnershipCertificate) public OwnershipCertificateRecords;
+    // // 存储已存在的 OwnershipCertificate，映射 Hash 到 Metadata
+    // mapping(string => OwnershipCertificate) public OwnershipCertificateRecords;
 
-    function addOwnerShipCertificate() public {
-        require(bytes(OwnershipCertificateRecords[metadata.Hash].Hash).length == 0, "OwnershipCertificate with this Hash already exists, the person does not own the data");
-        OwnershipCertificate memory newownership = OwnershipCertificate({
-            owner_ID: metadata.ID,
-            Hash : metadata.Hash,
-            size : metadata.size,
-            states : true,
-            timestamp : block.timestamp
-        });
-        OwnershipCertificateRecords[metadata.Hash] = newownership;
-    }
+    // function addOwnerShipCertificate() public {
+    //     require(bytes(OwnershipCertificateRecords[metadata.Hash].Hash).length == 0, "OwnershipCertificate with this Hash already exists, the person does not own the data");
+    //     OwnershipCertificate memory newownership = OwnershipCertificate({
+    //         owner_ID: metadata.ID,
+    //         Hash : metadata.Hash,
+    //         size : metadata.size,
+    //         states : true,
+    //         timestamp : block.timestamp
+    //     });
+    //     OwnershipCertificateRecords[metadata.Hash] = newownership;
+    // }
 
     struct Request {
         string user_ID;
@@ -56,8 +67,8 @@ contract Verification
     }
 
    
-
-    function UploadRequest(string memory user, string memory owner, string memory filehash, uint time) public {
+    // 申请使用权
+    function UploadRequest(string memory user, string memory owner, string memory filehash, uint time) public payable {
         request.user_ID = user;
         request.owner_ID = owner;
         request.Hash = filehash;
@@ -66,6 +77,7 @@ contract Verification
 
     struct RightsofuseAudit {
         string user_ID;
+        string[] authorizers_ID;
         string Hash;
         bool states;
         uint timestamp;
@@ -74,10 +86,24 @@ contract Verification
     // 存储已存在的 RightsofuseAudit，映射 Hash 到 RightsofuseAudit
     mapping(string => RightsofuseAudit) public RightsofuseAuditRecords;
 
+    // The authorizer who agrees to grant the right of use:
+    string[] Authorizers_ID;
+    function generateAuthorizers_ID() public returns (string[] memory) {
+        for (uint i = 0; i < pp.t; i++) {
+            Authorizers_ID.push(G1PointtoString(PKs[i]));
+        }
+        return Authorizers_ID;
+    }
+
+    // 行使控制权，记录使用权
     function addRightsofuseAudit() public {
+        generateAuthorizers_ID();
+
         require(ReEncVerify(), "ReEncVerify failed, proxies do not to grant the right of use to the user.");
+        
         RightsofuseAudit memory newuseAudit = RightsofuseAudit({
             user_ID: request.user_ID,
+            authorizers_ID : Authorizers_ID,
             Hash : request.Hash,
             states : true,
             timestamp : block.timestamp
@@ -86,7 +112,7 @@ contract Verification
     }
 
 
-    OwnershipCertificate[] OCs;
+    // OwnershipCertificate[] OCs;
     RightsofuseAudit[] RUAs;
 
     int public MDA_i = 50; // minimum deposited assets
@@ -193,6 +219,12 @@ contract Verification
 		require(success, "elliptic curve multiplication failed");
 	}
 
+    function G1PointtoString(G1Point memory point) internal pure returns (string memory) {
+        // 使用 abi.encodePacked 生成字节数组，然后将其转换为字符串
+        return string(abi.encodePacked(point.X, point.Y));
+    }
+
+    
     // 将 G1Point 序列化为字节数组
     function serializeG1Point(G1Point memory point) internal pure returns (bytes memory) {
         return abi.encodePacked(point.X, point.Y);
@@ -375,6 +407,23 @@ contract Verification
         return true;
     }
 
+    function DisputeVerify() public payable returns (bool) {
+        G1Point memory gG = g1mul(pp.g, DLEQProofDispute.z);
+        G1Point memory y1G = g1mul(pkb, DLEQProofDispute.c);
+        G1Point memory hG = g1mul(pka, DLEQProofDispute.z);
+        G1Point memory y2G = g1mul(Dis.pkaskb, DLEQProofDispute.c);
+        
+        G1Point memory pt1 = g1add(gG, y1G);
+        G1Point memory pt2 = g1add(hG, y2G);
+
+        if ((DLEQProofDispute.a1.X != pt1.X) || (DLEQProofDispute.a1.Y != pt1.Y) || (DLEQProofDispute.a2.X != pt2.X) || (DLEQProofDispute.a2.Y != pt2.Y)) {
+            DisputeVerificationResult.push(false);
+            return false;
+        }
+        DisputeVerificationResult.push(true);
+        return true;
+    }
+
     function ReEncVerify() public payable returns (bool) {
        uint256 nums = 0;//记录通过验证的个数
         for (uint256 i = 0; i < DLEQProofReEncs.length; i++) {
@@ -418,6 +467,11 @@ contract Verification
         uint256 z;
     }
 
+    struct Dispute {
+        DLEQProof dleq;
+        G1Point pkaskb;
+    }
+
     struct Param {
         G1Point g;
         uint256 n;
@@ -428,6 +482,8 @@ contract Verification
     
     DLEQProof DLEQProofReKey;
     DLEQProof[] DLEQProofReEncs;
+    DLEQProof DLEQProofDispute;
+    Dispute Dis;
     // DleqProof[] dleqproofReEncs;
     G1Point pka;
     G1Point pkb;
@@ -436,14 +492,16 @@ contract Verification
     Param pp;
     bool[] ReKeyVerificationResult;
     bool[] ReEncVerificationResult;
+    bool[] DisputeVerificationResult;
     G1Point[] C2p;
     
     // uint256[] coefficients;
-    Metadata metadata;
+    Metadata public metadata;
     Request request;
     RightsofuseAudit useAudit;
     G1Point U;
-    G1Point V;
+    G1Point V; 
+
     // bytes Hinput;
 
     function UploadParams(G1Point memory g,uint256 n, uint256 t, uint256[] memory Alpha, uint256[] memory Vi) public payable {
@@ -495,6 +553,15 @@ contract Verification
         DLEQProofReKey.z = z;
     }
 
+    function UploadDispute(uint256 c, G1Point memory a1, G1Point memory a2, uint256 z, G1Point memory PKAskb) public payable {
+        DLEQProofDispute.c = c;
+        DLEQProofDispute.a1 = a1;
+        DLEQProofDispute.a2 = a2;
+        DLEQProofDispute.z = z;
+        Dis.pkaskb = PKAskb;
+        Dis.dleq = DLEQProofDispute;
+    }
+
     function UploadDLEQProofReEnc(uint256[] memory _c, G1Point[] memory _a1, G1Point[] memory _a2, uint256[] memory _z) public payable {
         DLEQProof memory DLEQProofReEnc;
         for (uint i = 0; i < _c.length; i++) {
@@ -515,13 +582,10 @@ contract Verification
         return ReEncVerificationResult;
     }
 
-    function UploadMetadata(string memory id, string memory filehash, int256 size, string memory desp, uint time) public payable {
-        metadata.ID = id;
-        metadata.Hash = filehash;
-        metadata.size = size;
-        metadata.description = desp;
-        metadata.timestamp = time;
+    function GetDisputeVrfResult() public view returns (bool [] memory){
+        return DisputeVerificationResult;
     }
+
 
 
     // ==========================================================================================================================================================

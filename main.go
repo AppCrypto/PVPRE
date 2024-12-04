@@ -15,6 +15,7 @@ import (
 
 	shell "github.com/ipfs/go-ipfs-api"
 
+	"pvpre/crypto/dleq"
 	"pvpre/crypto/gss"
 	"pvpre/crypto/pvpre"
 	"pvpre/utils"
@@ -32,6 +33,13 @@ type Metadata struct {
 	size        *big.Int
 	description string
 	timestamp   *big.Int
+}
+
+type Request struct {
+	User_ID   string
+	Owner_ID  string
+	Hash      string
+	timestamp *big.Int
 }
 
 func G1ToPoint(point *bn128.G1) contract.VerificationG1Point {
@@ -80,9 +88,9 @@ func main() {
 	// 创建合约实例
 	ctc, _ := contract.NewContract(common.HexToAddress(address.Hex()), client)
 
-	numShares, l := 100, 256 //l为AES-256，即密钥长度
+	numShares, l := 10, 256 //l为AES-256，即密钥长度
 
-	threshold := numShares/2 + 1
+	threshold := 2*numShares/3 + 1
 
 	// var n int64 = 1
 
@@ -158,22 +166,6 @@ func main() {
 	}
 	// 输出文件的CID（即IPFS哈希值）
 	fmt.Println("Encrypted data uploaded to IPFS with CID:", cid)
-
-	metadata := &Metadata{
-		ID:          pka.String(),
-		Hash:        cid,
-		size:        big.NewInt(size),
-		description: "This is a test file data",
-		timestamp:   big.NewInt(time.Now().Unix()),
-	}
-
-	auth14 := utils.Transact(client, privatekey, big.NewInt(0))
-	tx14, _ := ctc.UploadMetadata(auth14, metadata.ID, metadata.Hash, metadata.size, metadata.description, metadata.timestamp)
-	receipt14, err := bind.WaitMined(context.Background(), client, tx14)
-	if err != nil {
-		log.Fatalf("Tx receipt failed %v", err)
-	}
-	fmt.Printf("Upload \"Metadata\" Gas used: %d\n", receipt14.GasUsed)
 
 	fmt.Println(".........................................................ReKeyGen...........................................................")
 	// 生成重加密密钥并上传到区块链上验证
@@ -293,9 +285,106 @@ func main() {
 	} else {
 		fmt.Print("Test failed: decrypted message does not match the original message.\n")
 	}
+	// ==========================================================================================================================================================
+	// Test Data right confirmation 40+
+
+	fmt.Println("..................................................TestDateRightConfirmation....................................................")
+
+	fmt.Println("The size of M is : ", size, " MB")
+	fmt.Println("N = ", numShares, ", threshold = ", threshold)
+
+	// Hhash := "QmXBvED4QfqjWjMAiWnqp6HHX2JEgrJJZUxFutBa6A5kpS"
+
+	metadata := &Metadata{
+		ID:          pka.String(),
+		Hash:        cid,
+		size:        big.NewInt(size),
+		description: "This is a test file data",
+		timestamp:   big.NewInt(time.Now().Unix()),
+	}
+
+	// 上传Metadata 并 记载在区块链上，（相当于执行查找过程） 的Gas开销
+	auth40 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx40, _ := ctc.UploadMetadata(auth40, metadata.ID, metadata.Hash, metadata.size, metadata.description, metadata.timestamp)
+	receipt40, err := bind.WaitMined(context.Background(), client, tx40)
+	if err != nil {
+		log.Fatalf("Tx receipt failed %v", err)
+	}
+	// fmt.Printf("Upload and Record \"Metadata\" Gas used: %d\n", receipt40.GasUsed)
+
+	auth41 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx41, _ := ctc.AddMetadata(auth41)
+	receipt41, err := bind.WaitMined(context.Background(), client, tx41)
+	if err != nil {
+		log.Fatalf("Tx receipt failed %v", err)
+	}
+	fmt.Printf("Upload and Recorded \"Metadata\" Gas used: %d\n", receipt40.GasUsed+receipt41.GasUsed)
+
+	// 上传Request的Gas开销
+	Request := &Request{
+		User_ID:   pkb.String(),
+		Owner_ID:  pka.String(),
+		Hash:      cid,
+		timestamp: big.NewInt(time.Now().Unix()),
+	}
+	auth42 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx42, _ := ctc.UploadRequest(auth42, Request.User_ID, Request.Owner_ID, Request.Hash, Request.timestamp)
+	receipt42, err := bind.WaitMined(context.Background(), client, tx42)
+	if err != nil {
+		log.Fatalf("Tx receipt failed %v", err)
+	}
+	fmt.Printf("Upload \"Request\" Gas used: %d\n", receipt42.GasUsed)
+
+	auth44 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx44, _ := ctc.GenerateAuthorizersID(auth44)
+	_, _ = bind.WaitMined(context.Background(), client, tx44)
+
+	// 记录使用权授权记录 RightsofUseAudit
+	auth43 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx43, _ := ctc.AddRightsofuseAudit(auth43)
+	receipt43, err := bind.WaitMined(context.Background(), client, tx43)
+	if err != nil {
+		log.Fatalf("Tx receipt failed %v", err)
+	}
+	fmt.Printf("Record \"RightofUseAudit\" Gas used: %d\n", receipt43.GasUsed)
+
+	// Dispute 50+
+	fmt.Println(".........................................................Dispute............................................................")
+	pkaskb := new(bn128.G1).ScalarMult(pka, skb)
+	disc, disz, disrG, disrH, err := dleq.NewDLEQProof(par.Par.PP.G, pka, pkb, pkaskb, skb)
+	if err != nil {
+		fmt.Println("Failed to create DLEQ proof:", err)
+	}
+	auth51 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx51, _ := ctc.UploadDispute(auth51, disc, G1ToPoint(disrG), G1ToPoint(disrH), disz, G1ToPoint(pkaskb))
+	receipt51, err := bind.WaitMined(context.Background(), client, tx51)
+	if err != nil {
+		log.Fatalf("Tx receipt failed %v", err)
+	}
+	fmt.Printf("Upload Dispute Gas used: %d\n", receipt51.GasUsed)
+
+	// 链上验证Dispute
+	disValidity := dleq.Verify(disc, disz, par.Par.PP.G, pka, pkb, pkaskb, disrG, disrH)
+	if disValidity == nil {
+		fmt.Print("The off-chain result of DisputeVerify(pi_dis) is true\n")
+	}
+
+	auth52 := utils.Transact(client, privatekey, big.NewInt(0))
+	tx52, _ := ctc.DisputeVerify(auth52)
+	DisputeVerifyResult, _ := ctc.GetDisputeVrfResult(&bind.CallOpts{})
+	receipt52, err := bind.WaitMined(context.Background(), client, tx52)
+	fmt.Printf("ReEnc Verify Gas used: %d\n", receipt52.GasUsed)
+	if err != nil {
+		log.Fatalf("Tx receipt failed %v", err)
+	}
+	fmt.Printf("DisputeVerify Result: %v\n", DisputeVerifyResult)
 
 	// ==========================================================================================================================================================
-	// Test Umbral's ReEncVerify Gas cost:
+
+	// ==========================================================================================================================================================
+	// Test Umbral's ReEncVerify Gas cost: 30+
+
+	// fmt.Println(".........................................................TestUmbral............................................................")
 
 	// upar := ukem.Setup(numShares, threshold)
 	// upka, uska, upkb, _, uPKs, _ := pre.KeyGen(upar)

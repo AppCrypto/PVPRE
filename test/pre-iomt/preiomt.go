@@ -5,7 +5,8 @@ import (
 	"crypto/sha256"
 	"math/big"
 
-	bn128 "github.com/fentec-project/bn256"
+	// bn128 "github.com/fentec-project/bn256"
+	bn128 "pvpre/bn128"
 )
 
 type HFunc func([]byte) *big.Int
