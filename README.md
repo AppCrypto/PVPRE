@@ -1,4 +1,4 @@
-# Proof of concept implementation for "PVPRE and Its appplications in DRC"
+# Proof of concept implementation for "PVTPRE and Its appplications in data rights confirmation"
 
 # Pre-requisites
 
